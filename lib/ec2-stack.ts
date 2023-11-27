@@ -1,10 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
 import {StackProps} from 'aws-cdk-lib';
 import {Construct} from 'constructs';
-import {ARecord, IPublicHostedZone, RecordTarget} from "aws-cdk-lib/aws-route53";
 import {
-    CfnEIP,
-    CfnEIPAssociation, CfnKeyPair,
+    CfnKeyPair,
     Instance,
     InstanceClass,
     InstanceSize,
@@ -19,12 +17,11 @@ import {Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
 import * as fs from "fs";
 
 export interface Ec2StackProps extends StackProps {
-    hostedZone: IPublicHostedZone,
     enableSsh: Boolean
 }
 
 export class Ec2Stack extends cdk.Stack {
-
+    public readonly instance: Instance
     constructor(scope: Construct, id: string, props: Ec2StackProps) {
         super(scope, id, props);
 
@@ -55,7 +52,7 @@ export class Ec2Stack extends cdk.Stack {
             publicKeyMaterial: fs.readFileSync("./public.pem", 'utf-8')
         }) : undefined;
 
-        const instance = new Instance(this, 'signal-tls-proxy-instance', {
+        this.instance = new Instance(this, 'signal-tls-proxy-instance', {
             vpc: defaultVpc,
             role: role,
             securityGroup: securityGroup,
@@ -67,19 +64,8 @@ export class Ec2Stack extends cdk.Stack {
             machineImage: MachineImage.latestAmazonLinux2(),
             keyName: props.enableSsh ? cfnKeyPair?.keyName : undefined
         })
-
-        const elasticIp = new CfnEIP(this, "signal-tls-proxy-ip");
-
-        new CfnEIPAssociation(this, "signal-tls-proxy-ec2-ip-association", {
-            eip: elasticIp.ref,
-            instanceId: instance.instanceId
-        });
-
-        new ARecord(this, 'signal-tls-proxy-ec2-record', {
-            target: RecordTarget.fromIpAddresses(elasticIp.ref),
-            zone: props.hostedZone,
-            recordName: '', // Root of hosted zone
-            deleteExisting: true,
-        });
+        this.instance.addUserData(
+            fs.readFileSync('./scripts/userdata.txt', 'utf8')
+        )
     }
 }
