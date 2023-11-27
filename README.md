@@ -18,6 +18,8 @@ export TLS_PROXY_DOMAIN = asdfasdfasdf
 cdk bootstrap
 cdk deploy --all
 
+ENABLE_SSH
+save rsa public key as public.pem in root folder
 cdk destory --all # Remove 
 
 ```

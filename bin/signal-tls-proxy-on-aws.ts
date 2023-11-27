@@ -3,7 +3,7 @@ import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import {Ec2Stack} from '../lib/ec2-stack';
 import {StackProps} from "aws-cdk-lib";
-import {AWS_ACCOUNT, AWS_REGION} from "./config";
+import {AWS_ACCOUNT, AWS_REGION, ENABLE_SSH} from "./config";
 import {ProxyHostedZone} from "../lib/proxy-hosted-zone";
 
 const app = new cdk.App();
@@ -17,5 +17,6 @@ const hostedZoneStack = new ProxyHostedZone(app, 'SignalTlsProxyHostedZoneStack'
 
 new Ec2Stack(app, 'SignalTlsProxyOnAwsStack', {
     ...stackProps,
+    enableSsh: ENABLE_SSH,
     hostedZone: hostedZoneStack.hostedZone
 });

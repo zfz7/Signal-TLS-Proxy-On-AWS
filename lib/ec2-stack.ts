@@ -4,7 +4,7 @@ import {Construct} from 'constructs';
 import {ARecord, IPublicHostedZone, RecordTarget} from "aws-cdk-lib/aws-route53";
 import {
     CfnEIP,
-    CfnEIPAssociation,
+    CfnEIPAssociation, CfnKeyPair,
     Instance,
     InstanceClass,
     InstanceSize,
@@ -16,13 +16,15 @@ import {
     Vpc
 } from "aws-cdk-lib/aws-ec2";
 import {Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
+import * as fs from "fs";
 
 export interface Ec2StackProps extends StackProps {
-    hostedZone: IPublicHostedZone
+    hostedZone: IPublicHostedZone,
+    enableSsh: Boolean
 }
 
 export class Ec2Stack extends cdk.Stack {
-    public readonly ec2PublicIpV4: string
+
     constructor(scope: Construct, id: string, props: Ec2StackProps) {
         super(scope, id, props);
 
@@ -37,12 +39,21 @@ export class Ec2Stack extends cdk.Stack {
                 securityGroupName: 'signal-tls-proxy-sg',
             }
         )
-        securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(22), 'Allows SSH access (ipv4)')
+        if (props.enableSsh) {
+            securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(22), 'Allows SSH access (ipv4)')
+            securityGroup.addIngressRule(Peer.anyIpv6(), Port.tcp(22), 'Allows SSH access (ipv6)')
+        }
+        securityGroup.addIngressRule(Peer.anyIpv6(), Port.tcp(80), 'Allows HTTP access (ipv6)')
         securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(80), 'Allows HTTP access (ipv4)')
         securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(443), 'Allows HTTPS access (ipv4)')
-        securityGroup.addIngressRule(Peer.anyIpv6(), Port.tcp(22), 'Allows SSH access (ipv6)')
-        securityGroup.addIngressRule(Peer.anyIpv6(), Port.tcp(80), 'Allows HTTP access (ipv6)')
         securityGroup.addIngressRule(Peer.anyIpv6(), Port.tcp(443), 'Allows HTTPS access (ipv6)')
+
+        const cfnKeyPair = props.enableSsh ? new CfnKeyPair(this, 'signal-tls-proxy-key', {
+            keyName: 'signal-tls-key',
+            keyFormat: 'pem',
+            keyType: 'rsa',
+            publicKeyMaterial: fs.readFileSync("./public.pem", 'utf-8')
+        }) : undefined;
 
         const instance = new Instance(this, 'signal-tls-proxy-instance', {
             vpc: defaultVpc,
@@ -53,7 +64,8 @@ export class Ec2Stack extends cdk.Stack {
                 InstanceClass.T3A,
                 InstanceSize.MICRO
             ),
-            machineImage: MachineImage.latestAmazonLinux2()
+            machineImage: MachineImage.latestAmazonLinux2(),
+            keyName: props.enableSsh ? cfnKeyPair?.keyName : undefined
         })
 
         const elasticIp = new CfnEIP(this, "signal-tls-proxy-ip");
@@ -69,9 +81,5 @@ export class Ec2Stack extends cdk.Stack {
             recordName: '', // Root of hosted zone
             deleteExisting: true,
         });
-
-        new cdk.CfnOutput(this, 'signal-tls-proxy-output', {
-            value: instance.instancePublicIp
-        })
     }
 }
