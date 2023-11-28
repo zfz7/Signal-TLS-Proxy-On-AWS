@@ -3,7 +3,7 @@ import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import {Ec2Stack} from '../lib/ec2-stack';
 import {StackProps} from "aws-cdk-lib";
-import {AWS_ACCOUNT, AWS_REGION, ENABLE_SSH} from "./config";
+import {AWS_ACCOUNT, AWS_REGION, ENABLE_SSH, TLS_PROXY_DOMAIN} from "./config";
 import {HostedZoneStack} from "../lib/hosted-zone-stack";
 import {DnsStack} from "../lib/dns-stack";
 
@@ -14,11 +14,13 @@ const stackProps: StackProps = {
 
 const hostedZoneStack = new HostedZoneStack(app, 'SignalTlsProxyHostedZoneStack', {
     ...stackProps,
+    domainName: TLS_PROXY_DOMAIN
 })
 
-const ec2Stack = new Ec2Stack(app, 'SignalTlsProxyEc2tack', {
+const ec2Stack = new Ec2Stack(app, 'SignalTlsProxyEc2Stack', {
     ...stackProps,
     enableSsh: ENABLE_SSH,
+    domainName: TLS_PROXY_DOMAIN
 });
 
 new DnsStack(app, 'SignalTlsProxyDNSStack', {

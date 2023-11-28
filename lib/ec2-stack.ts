@@ -11,6 +11,7 @@ import {
     Peer,
     Port,
     SecurityGroup,
+    UserData,
     Vpc
 } from "aws-cdk-lib/aws-ec2";
 import {Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
@@ -18,10 +19,12 @@ import * as fs from "fs";
 
 export interface Ec2StackProps extends StackProps {
     enableSsh: Boolean
+    domainName: string
 }
 
 export class Ec2Stack extends cdk.Stack {
     public readonly instance: Instance
+
     constructor(scope: Construct, id: string, props: Ec2StackProps) {
         super(scope, id, props);
 
@@ -51,6 +54,8 @@ export class Ec2Stack extends cdk.Stack {
             keyType: 'rsa',
             publicKeyMaterial: fs.readFileSync("./public.pem", 'utf-8')
         }) : undefined;
+        let userData = fs.readFileSync('./scripts/userdata.sh', 'utf8');
+        userData = userData.replace(/\${TLS_PROXY_DOMAIN}/g, props.domainName)
 
         this.instance = new Instance(this, 'signal-tls-proxy-instance', {
             vpc: defaultVpc,
@@ -62,10 +67,9 @@ export class Ec2Stack extends cdk.Stack {
                 InstanceSize.MICRO
             ),
             machineImage: MachineImage.latestAmazonLinux2(),
-            keyName: props.enableSsh ? cfnKeyPair?.keyName : undefined
+            keyName: props.enableSsh ? cfnKeyPair?.keyName : undefined,
+            userData: UserData.forLinux({shebang:'Content-Type: multipart/mixed; boundary="//"'})
         })
-        this.instance.addUserData(
-            fs.readFileSync('./scripts/userdata.txt', 'utf8')
-        )
+        this.instance.addUserData(userData)
     }
 }
