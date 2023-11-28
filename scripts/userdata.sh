@@ -23,20 +23,26 @@ sudo yum upgrade
 sudo yum update -y
 sudo yum install docker containerd git screen -y
 sleep 1
-sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
-sleep 1
-sudo chmod +x /usr/local/bin/docker-compose
+if ! [ -f "/usr/local/bin/docker-compose" ]; then
+  sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+  sleep 1
+  sudo chmod +x /usr/local/bin/docker-compose
+  sleep 5
+  systemctl enable docker.service --now
+  sudo usermod -a -G docker ec2-user
+  sleep 1
+  echo "Rebooting to set permissions"
+  sudo reboot
+fi
 sleep 5
 systemctl enable docker.service --now
-sudo usermod -a -G docker ec2-user
-
 # Wait for IP address to be associated
 max_retries=300
 retry_interval=10  # in seconds
-# Resolve the desired URL to an IP address
-desired_ip=$(dig +short "${TLS_PROXY_DOMAIN}" | head -n 1)
 
 for ((i=1; i<=$max_retries; i++)); do
+    # Resolve the desired URL to an IP address
+    desired_ip=$(dig +short "${TLS_PROXY_DOMAIN}" @1.1.1.1 | head -n 1)
     current_ip=$(curl -s ifconfig.me/ip)
 
     if [ "$current_ip" == "$desired_ip" ]; then
