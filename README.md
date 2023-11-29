@@ -28,6 +28,6 @@ cdk deploy --all
 cdk destory --all
 ```
 
-### (Optional) SSH Access
+### SSH Access
 
 In `config.ts` set `ENABLE_SSH = true` and save a `public.pem` RSA public key in the root folder. 
