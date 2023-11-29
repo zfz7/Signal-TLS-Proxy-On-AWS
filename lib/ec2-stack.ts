@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import {StackProps} from 'aws-cdk-lib';
 import {Construct} from 'constructs';
 import {
+    CfnEIP, CfnEIPAssociation,
     CfnKeyPair,
     Instance,
     InstanceClass,
@@ -16,14 +17,15 @@ import {
 } from "aws-cdk-lib/aws-ec2";
 import {Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
 import * as fs from "fs";
+import {ARecord, IPublicHostedZone, RecordTarget} from "aws-cdk-lib/aws-route53";
 
 export interface Ec2StackProps extends StackProps {
     enableSsh: Boolean
     domainName: string
+    hostedZone: IPublicHostedZone
 }
 
 export class Ec2Stack extends cdk.Stack {
-    public readonly instance: Instance
 
     constructor(scope: Construct, id: string, props: Ec2StackProps) {
         super(scope, id, props);
@@ -57,7 +59,7 @@ export class Ec2Stack extends cdk.Stack {
         let userData = fs.readFileSync('./scripts/userdata.sh', 'utf8');
         userData = userData.replace(/\${TLS_PROXY_DOMAIN}/g, props.domainName)
 
-        this.instance = new Instance(this, 'signal-tls-proxy-instance', {
+        const instance = new Instance(this, 'signal-tls-proxy-instance', {
             vpc: defaultVpc,
             role: role,
             securityGroup: securityGroup,
@@ -70,6 +72,20 @@ export class Ec2Stack extends cdk.Stack {
             keyName: props.enableSsh ? cfnKeyPair?.keyName : undefined,
             userData: UserData.forLinux({shebang:'Content-Type: multipart/mixed; boundary="//"'})
         })
-        this.instance.addUserData(userData)
+        instance.addUserData(userData)
+
+        const elasticIp = new CfnEIP(this, "signal-tls-proxy-ip");
+
+        new CfnEIPAssociation(this, "signal-tls-proxy-ec2-ip-association", {
+            eip: elasticIp.ref,
+            instanceId: instance.instanceId
+        });
+
+        new ARecord(this, 'signal-tls-proxy-ec2-record', {
+            target: RecordTarget.fromIpAddresses(elasticIp.ref),
+            zone: props.hostedZone,
+            recordName: '', // Root of hosted zone
+            deleteExisting: true,
+        });
     }
 }
